@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT-23 Malware Detection Dashboard | Capstone Project</title>
+  <meta name="description"
+    content="Interactive dashboard visualizing XGBoost binary classification results across 23 IoT-23 network traffic datasets for Mirai malware detection.">
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="container">
+      <h1>IoT-23 Malware Detection</h1>
+      <p class="subtitle">XGBoost Binary Classification across 23 IoT Network Traffic Datasets — Capstone Project
+        Dashboard</p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="value" id="stat-datasets">23</span>
+          <span class="label">Total Datasets</span>
+        </div>
+        <div class="stat-card">
+          <span class="value" id="stat-trained">—</span>
+          <span class="label">Models Trained</span>
+        </div>
+        <div class="stat-card">
+          <span class="value" id="stat-rows">—</span>
+          <span class="label">Total Rows Processed</span>
+        </div>
+        <div class="stat-card">
+          <span class="value" id="stat-auc">—</span>
+          <span class="label">Avg Test ROC-AUC</span>
+        </div>
+        <div class="stat-card">
+          <span class="value" id="stat-best">—</span>
+          <span class="label">Best Model</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Pipeline -->
+  <section>
+    <div class="container">
+      <h2 class="section-title"><span class="icon">⚙️</span> Processing Pipeline</h2>
+      <p class="section-desc">End-to-end ML pipeline from raw CSV to evaluated XGBoost models</p>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+  </section>
+
+  <!-- Model Comparison Table -->
+  <section>
+    <div class="container">
+      <h2 class="section-title"><span class="icon">📋</span> Model Performance Comparison</h2>
+      <p class="section-desc">Click any row to expand detailed metrics with confusion matrices</p>
+      <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="🔍 Search dataset..." oninput="renderTable()">
+        <select id="statusFilter" onchange="renderTable()">
+          <option value="all">All Status</option>
+          <option value="trained">Trained</option>
+          <option value="single_class_train">Single Class</option>
+          <option value="libsvm_error">Error</option>
+        </select>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th data-col="id" onclick="sortTable('id')">Dataset <span class="sort-icon">⇅</span></th>
+              <th>Status</th>
+              <th data-col="trainRows" onclick="sortTable('trainRows')">Train Rows <span class="sort-icon">⇅</span></th>
+              <th>Features</th>
+              <th>Malicious %</th>
+              <th data-col="testAuc" onclick="sortTable('testAuc')">Test ROC-AUC <span class="sort-icon">⇅</span></th>
+              <th data-col="testAcc" onclick="sortTable('testAcc')">Test Accuracy <span class="sort-icon">⇅</span></th>
+              <th>TP</th>
+              <th>FP</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Charts -->
+  <section>
+    <div class="container">
+      <h2 class="section-title"><span class="icon">📊</span> Visual Analytics</h2>
+      <p class="section-desc">Interactive charts comparing model performance across all trained datasets</p>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>🎯 Test ROC-AUC by Dataset</h3>
+          <canvas id="aucChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>✅ Test Accuracy by Dataset</h3>
+          <canvas id="accChart"></canvas>
+        </div>
+        <div class="chart-card chart-full">
+          <h3>📏 Dataset Size Comparison (Training Rows)</h3>
+          <canvas id="sizeChart" style="max-height:600px"></canvas>
+        </div>
+        <div class="chart-card chart-full">
+          <h3>⚖️ Class Distribution (Benign vs Malicious)</h3>
+          <canvas id="classChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section>
+    <div class="container">
+      <h2 class="section-title"><span class="icon">🔬</span> Network Features Used</h2>
+      <p class="section-desc">16 selected network traffic features extracted from IoT-23 Zeek connection logs</p>
+      <div class="features-grid" id="features"></div>
+    </div>
+  </section>
+
+  <!-- Live Detection -->
+  <section>
+    <div class="container">
+      <h2 class="section-title"><span class="icon">🔍</span> Live Malware Detection</h2>
+      <p class="section-desc">Upload network traffic CSV to detect malicious packets using ensemble of trained XGBoost
+        models</p>
+
+      <div class="detect-upload-zone" id="uploadZone">
+        <div class="upload-icon">📂</div>
+        <p class="upload-title">Drop CSV file here or click to upload</p>
+        <p class="upload-hint">Supports .csv and .parquet files</p>
+        <input type="file" id="detectFile" accept=".csv,.parquet" style="display:none">
+      </div>
+
+      <div id="detectControls" style="display:none">
+        <div class="detect-file-info">
+          <span id="detectFileName"></span>
+          <button class="btn-remove" onclick="clearDetection()">✕ Remove</button>
+        </div>
+        <div class="detect-settings">
+          <label>Threshold: <strong id="threshVal">0.50</strong></label>
+          <input type="range" id="detectThreshold" min="0" max="1" step="0.05" value="0.5"
+            oninput="document.getElementById('threshVal').textContent=parseFloat(this.value).toFixed(2)">
+          <label>Combine Rule:</label>
+          <select id="detectCombine">
+            <option value="mean">Mean</option>
+            <option value="max">Max</option>
+          </select>
+          <button class="btn-detect" id="btnDetect" onclick="runDetection()">🔍 Run Detection</button>
+        </div>
+      </div>
+
+      <div id="detectProgress" style="display:none">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="progress-text" id="progressText">Analyzing...</p>
+      </div>
+
+      <!-- Detection Results -->
+      <div id="detectResults" style="display:none">
+        <div class="stats-grid" style="margin-top:24px">
+          <div class="stat-card"><span class="value" id="det-total">—</span><span class="label">Total Packets</span>
+          </div>
+          <div class="stat-card"><span class="value detect-benign" id="det-benign">—</span><span class="label">✅
+              Allowed</span></div>
+          <div class="stat-card"><span class="value detect-malicious" id="det-malicious">—</span><span class="label">❌
+              Dropped</span></div>
+          <div class="stat-card"><span class="value" id="det-threat">—</span><span class="label">Threat Level</span>
+          </div>
+        </div>
+
+        <div class="charts-grid" style="margin-top:24px">
+          <div class="chart-card">
+            <h3>🎯 Threat Breakdown</h3><canvas id="detectPieChart"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>📊 Probability Distribution</h3><canvas id="detectHistChart"></canvas>
+          </div>
+          <div class="chart-card chart-full">
+            <h3>🏆 Model Detection Counts</h3><canvas id="detectModelChart"></canvas>
+          </div>
+        </div>
+
+        <div class="detect-tabs">
+          <button class="tab-btn active" onclick="switchTab('allowed')">✅ Allowed Packets (<span
+              id="tab-ben-count">0</span>)</button>
+          <button class="tab-btn" onclick="switchTab('dropped')">❌ Dropped Packets (<span
+              id="tab-mal-count">0</span>)</button>
+        </div>
+        <div class="table-wrapper" id="detectTableWrap">
+          <table>
+            <thead id="detectTHead"></thead>
+            <tbody id="detectTBody"></tbody>
+          </table>
+        </div>
+
+        <div style="text-align:center;margin-top:20px">
+          <button class="btn-detect" onclick="downloadResults('allowed')">📥 Download Allowed</button>
+          <button class="btn-detect" style="background:linear-gradient(135deg,#ef4444,#f59e0b)"
+            onclick="downloadResults('dropped')">📥 Download Dropped</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>IoT-23 Malware Detection Dashboard — Capstone Project 2025-26</p>
+      <p style="margin-top:4px">Built with XGBoost · Chart.js · Powered by <a
+          href="https://www.stratosphereips.org/datasets-iot23" target="_blank">IoT-23 Dataset</a></p>
+    </div>
+  </footer>
+
+  <script src="dashboard_data.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+
+</html>
