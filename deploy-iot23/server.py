@@ -13,6 +13,7 @@ MODELS_ROOT = os.path.join(BASE_DIR, "cap PPt", "IOT23_Models", "IOT23_Models")
 
 app = Flask(__name__)
 CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB limit for free tier
 
 # ── Load models at startup with error handling ──
 MODELS = []
